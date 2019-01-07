@@ -46,7 +46,7 @@ def draw_shield_bar(surface, x, y, percentage):
     fill = (percentage / 100) * BAR_LENGTH
     outline_rect = pygame.Rect(x, y, BAR_LENGTH, BAR_HEIGHT)
     fill_rect = pygame.Rect(x, y, fill, BAR_HEIGHT)
-    pygame.draw.rect(surface, BLUE, fill_rect)
+    pygame.draw.rect(surface, GREEN, fill_rect)
     pygame.draw.rect(surface, WHITE, outline_rect, 2)
 
 
@@ -68,14 +68,18 @@ class Player(pygame.sprite.Sprite):
         self.rect.bottom = HEIGHT - 10
         self.speedx = 0
         self.shield = 100
+        self.shoot_delay = 250
+        self.last_shot = pygame.time.get_ticks()
 
     def update(self):
         self.speedx = 0
         keystate = pygame.key.get_pressed()
         if keystate[pygame.K_LEFT] or keystate[pygame.K_a]:
-            self.speedx = -5
+            self.speedx = -8
         if keystate[pygame.K_RIGHT] or keystate[pygame.K_d]:
-            self.speedx = 5
+            self.speedx = 8
+        if keystate[pygame.K_SPACE]:
+            self.shoot()
         self.rect.x += self.speedx
         if self.rect.right > WIDTH:
             self.rect.right = WIDTH
@@ -83,10 +87,13 @@ class Player(pygame.sprite.Sprite):
             self.rect.left = 0
 
     def shoot(self):
-        bullet = Bullet(self.rect.centerx, self.rect.top)
-        all_sprites.add(bullet)
-        bullets.add(bullet)
-        shoot_sound.play()
+        now = pygame.time.get_ticks()
+        if now - self.last_shot > self.shoot_delay:
+            self.last_shot = now
+            bullet = Bullet(self.rect.centerx, self.rect.top)
+            all_sprites.add(bullet)
+            bullets.add(bullet)
+            shoot_sound.play()
 
 
 class Mob(pygame.sprite.Sprite):
@@ -144,6 +151,31 @@ class Bullet(pygame.sprite.Sprite):
             self.kill()
 
 
+class Explosion(pygame.sprite.Sprite):
+    def __init__(self, center, size):
+        pygame.sprite.Sprite.__init__(self)
+        self.size = size
+        self.image = explosion_animation[self.size][0]
+        self.rect = self.image.get_rect()
+        self.rect.center = center
+        self.frame = 0
+        self.last_update = pygame.time.get_ticks()
+        self.frame_rate = 50
+
+    def update(self):
+        now = pygame.time.get_ticks()
+        if now - self.last_update > self.frame_rate:
+            self.last_update = now
+            self.frame += 1
+            if self.frame == len(explosion_animation[self.size]):
+                self.kill()
+            else:
+                center = self.rect.center
+                self.image = explosion_animation[self.size][self.frame]
+                self.rect = self.image.get_rect()
+                self.rect.center = center
+
+
 # Load all game graphics
 background = pygame.image.load(path.join(img_dir, 'starfield.png')).convert()
 background_rect = background.get_rect()
@@ -155,6 +187,18 @@ meteor_files = ['meteorBrown_big1.png', 'meteorBrown_big2.png', 'meteorBrown_med
                 'meteorBrown_tiny1.png']
 for img in meteor_files:
     meteor_images.append(pygame.image.load(path.join(img_dir, img)).convert())
+explosion_animation = dict()
+explosion_animation['lg'] = []
+explosion_animation['sm'] = []
+for i in range(9):
+    filename = 'regularExplosion0%s.png' % i
+    image = pygame.image.load(path.join(img_dir, filename)).convert()
+    image.set_colorkey(BLACK)
+    image_large = pygame.transform.scale(image, (75, 75))
+    explosion_animation['lg'].append(image_large)
+    image_small = pygame.transform.scale(image, (32, 32))
+    explosion_animation['sm'].append(image_small)
+
 
 # Load all game sounds
 shoot_sound = pygame.mixer.Sound(path.join(snd_dir, 'pew.wav'))
@@ -184,9 +228,6 @@ while running:
         # check for closing window
         if event.type == pygame.QUIT:
             running = False
-        elif event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_SPACE:
-                player.shoot()
 
     # Update
     all_sprites.update()
@@ -196,12 +237,17 @@ while running:
     for hit in hits:
         score += 50 - hit.radius
         random.choice(explosion_sounds).play()
+        explosion = Explosion(hit.rect.center, 'lg')
+        all_sprites.add(explosion)
         new_mob()
 
     # Check if a mob hit the player
     hits = pygame.sprite.spritecollide(player, mobs, True, pygame.sprite.collide_circle)
     for hit in hits:
         player.shield -= hit.radius * 2
+        explosion = Explosion(hit.rect.center, 'sm')
+        all_sprites.add(explosion)
+        new_mob()
         if player.shield <= 0:
             running = False
 
