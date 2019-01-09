@@ -4,7 +4,13 @@
 # - Frozen Jam by tgfcoder <https://twitter.com/tgfcoder> licensed under CC-BY-3
 import pygame
 import random
+import sys
+import os
 from os import path
+
+# Support running from single .exe (via PyInstaller)
+if getattr(sys, 'frozen', False):
+    os.chdir(sys._MEIPASS)
 
 img_dir = path.join(path.dirname(__file__), 'resources', 'img')
 snd_dir = path.join(path.dirname(__file__), 'resources', 'snd')
